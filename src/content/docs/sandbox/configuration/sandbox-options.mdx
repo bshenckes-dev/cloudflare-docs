@@ -132,27 +132,26 @@ Logging configuration is read when your Worker starts and cannot be changed at r
 
 Use `debug` + `pretty` for local development. Use `info` or `warn` + `json` for production (structured logging).
 
-### transport
+### Transport
 
-**Type**: `'http' | 'websocket'`
-**Default**: `'http'`
+**Type**: Environment variable
+**Default**: `http`
 
-Choose the transport layer for SDK-to-container communication. WebSocket transport multiplexes all operations over a single persistent connection, reducing sub-request count in Workers and Durable Objects.
+Control how the SDK communicates with containers. The SDK supports two transport protocols:
 
-<TypeScriptExample>
-```ts
-// Use HTTP transport (default)
-const sandbox1 = getSandbox(env.Sandbox, 'user-123');
+- **HTTP** (default) - Each SDK operation (file read, command execution, etc.) creates a separate HTTP request to the container
+- **WebSocket** - All SDK operations are multiplexed over a single persistent WebSocket connection
 
-// Use WebSocket transport to avoid sub-request limits
-const sandbox2 = getSandbox(env.Sandbox, 'user-456', {
-  transport: 'websocket'
-});
-```
-</TypeScriptExample>
+**When to use WebSocket transport**:
 
-**Environment variable override**:
-- `SANDBOX_TRANSPORT` - Set to `websocket` to enable WebSocket transport globally
+WebSocket transport is designed for Workers and Durable Objects that make many SDK calls and need to avoid sub-request limits. Each HTTP request to the container counts as a sub-request, which can quickly exhaust the 1000 sub-requests per Worker invocation limit.
+
+With WebSocket transport:
+- All operations share a single WebSocket connection (one sub-request total)
+- File operations, command execution, and process management are multiplexed over this connection
+- The connection persists for the lifetime of the sandbox, reducing overhead
+
+**Enable WebSocket transport**:
 
 <WranglerConfig>
 ```toml
@@ -161,19 +160,31 @@ SANDBOX_TRANSPORT = "websocket"
 ```
 </WranglerConfig>
 
-**When to use WebSocket transport:**
+<TypeScriptExample>
+```ts
+// Worker code remains unchanged - transport is configured via environment variable
+const sandbox = getSandbox(env.Sandbox, 'user-123');
 
-- **Workers and Durable Objects** - Avoid hitting sub-request limits when running many SDK operations
-- **High-frequency operations** - File operations, command execution, or streaming that generate many requests
-- **Long-lived workflows** - Interactive sessions with sustained activity
+// These operations now use WebSocket instead of HTTP
+await sandbox.writeFile('/app/data.json', JSON.stringify(data));
+await sandbox.exec('python process.py');
+const result = await sandbox.readFile('/app/output.json');
+```
+</TypeScriptExample>
 
-**When to use HTTP transport (default):**
+:::note[Transparent to your code]
+WebSocket transport is a drop-in replacement for HTTP transport. No code changes are required - simply set the environment variable and redeploy your Worker. All SDK methods work identically with both transports.
+:::
 
-- **Simple workloads** - Single commands or file operations that do not approach sub-request limits
-- **Debugging** - HTTP requests are easier to inspect in DevTools or logs
-- **Compatibility** - HTTP has broader runtime support and simpler debugging
+**Use HTTP transport when**:
+- Making fewer than 50-100 SDK calls per Worker invocation
+- You need maximum compatibility (HTTP is the proven default)
+- Debugging issues (HTTP requests are easier to inspect in logs)
 
-The SDK handles all transport-level details transparently. Your code works identically with both transports - only the underlying communication mechanism changes.
+**Use WebSocket transport when**:
+- Making hundreds of SDK calls per Worker invocation
+- Running into sub-request limit errors
+- Building applications with heavy file I/O or many command executions
 
 ### normalizeId
 
