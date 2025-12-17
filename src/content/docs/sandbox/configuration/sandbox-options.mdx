@@ -132,6 +132,49 @@ Logging configuration is read when your Worker starts and cannot be changed at r
 
 Use `debug` + `pretty` for local development. Use `info` or `warn` + `json` for production (structured logging).
 
+### transport
+
+**Type**: `'http' | 'websocket'`
+**Default**: `'http'`
+
+Choose the transport layer for SDK-to-container communication. WebSocket transport multiplexes all operations over a single persistent connection, reducing sub-request count in Workers and Durable Objects.
+
+<TypeScriptExample>
+```ts
+// Use HTTP transport (default)
+const sandbox1 = getSandbox(env.Sandbox, 'user-123');
+
+// Use WebSocket transport to avoid sub-request limits
+const sandbox2 = getSandbox(env.Sandbox, 'user-456', {
+  transport: 'websocket'
+});
+```
+</TypeScriptExample>
+
+**Environment variable override**:
+- `SANDBOX_TRANSPORT` - Set to `websocket` to enable WebSocket transport globally
+
+<WranglerConfig>
+```toml
+[vars]
+SANDBOX_TRANSPORT = "websocket"
+```
+</WranglerConfig>
+
+**When to use WebSocket transport:**
+
+- **Workers and Durable Objects** - Avoid hitting sub-request limits when running many SDK operations
+- **High-frequency operations** - File operations, command execution, or streaming that generate many requests
+- **Long-lived workflows** - Interactive sessions with sustained activity
+
+**When to use HTTP transport (default):**
+
+- **Simple workloads** - Single commands or file operations that do not approach sub-request limits
+- **Debugging** - HTTP requests are easier to inspect in DevTools or logs
+- **Compatibility** - HTTP has broader runtime support and simpler debugging
+
+The SDK handles all transport-level details transparently. Your code works identically with both transports - only the underlying communication mechanism changes.
+
 ### normalizeId
 
 **Type**: `boolean`
